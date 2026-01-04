@@ -24,17 +24,17 @@ class AIService {
       });
 
       // Detect CORS proxy URL based on environment
-      // For production deployment, use the same domain's proxy port
       const isProduction =
         !window.location.hostname.includes("localhost") &&
         !window.location.hostname.includes("127.0.0.1");
 
       if (isProduction) {
-        // In production, use the deployed CORS proxy (port 8080)
-        this.corsProxy = `${window.location.protocol}//${window.location.hostname}:8080/`;
-        console.log("🌐 Using production CORS proxy:", this.corsProxy);
+        // In production, use path-based proxy on same domain
+        // This avoids CORS and port exposure issues
+        this.corsProxy = "/api/proxy/";
+        console.log("🌐 Using production path-based proxy:", this.corsProxy);
       } else {
-        // In development, use localhost
+        // In development, use localhost CORS proxy
         this.corsProxy = "http://localhost:8080/";
         console.log("💻 Using development CORS proxy:", this.corsProxy);
       }
