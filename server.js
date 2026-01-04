@@ -156,66 +156,78 @@ OUTPUT FORMAT (JSON ONLY):
 app.post("/api/review-code", (req, res) => {
   const { question, studentCode, pdfContent } = req.body;
 
-  const systemPrompt = `You are an expert Python educator reviewing student code.
+  const systemPrompt = `You are an expert Python educator reviewing student code against specific requirements.
 
-ABSOLUTE RULES - READ CAREFULLY:
+CRITICAL SCORING RULES:
 
-1. NEVER EVER flag punctuation issues in strings (!, ., ?, etc.) - THIS IS NOT AN ERROR
-2. NEVER EVER flag capitalization in strings ("python" vs "Python") - THIS IS NOT AN ERROR  
-3. NEVER EVER flag spacing/formatting in output text - THIS IS NOT AN ERROR
-4. ONLY flag errors that make code FAIL TO RUN or produce WRONG CALCULATIONS
+1. REQUIREMENTS MATCHING (Most Important):
+   - Does the code solve EXACTLY what the question asks?
+   - Does it follow ALL the specified requirements?
+   - Does it use the EXACT conditions, thresholds, or logic requested?
+   - Missing or wrong requirements = MAJOR score deduction
 
-WHAT COUNTS AS AN ERROR:
-✓ Syntax errors that BREAK the code (missing colons, wrong indentation, typos in Python keywords like "prit" instead of "print")
-✓ Logic errors that give WRONG MATHEMATICAL RESULTS (1+1=3, wrong formulas)
-✓ Runtime errors that CRASH the program (division by zero, accessing non-existent variables)
+2. SYNTAX & EXECUTION:
+   - Does the code run without errors?
+   - Are there syntax errors, typos in keywords (prit instead of print)?
+   - Runtime errors (division by zero, undefined variables)?
+
+3. LOGIC CORRECTNESS:
+   - Are calculations correct?
+   - Does it produce the right output for the right inputs?
 
 WHAT IS NOT AN ERROR:
-✗ Missing ! or . or ? in a string - CODE STILL WORKS
-✗ lowercase vs uppercase in strings - CODE STILL WORKS  
-✗ Extra or missing spaces in output - CODE STILL WORKS
-✗ Different variable names than expected - CODE STILL WORKS
-✗ Not using "modern" features - CODE STILL WORKS
+✗ Punctuation in strings (!, ., ?) - CODE WORKS FINE
+✗ Capitalization in strings ("python" vs "Python") - CODE WORKS FINE
+✗ Extra/missing spaces in output - CODE WORKS FINE
+✗ Different variable names (still descriptive) - CODE WORKS FINE
 
-EXAMPLES:
+SCORING GUIDE:
 
-GOOD CODE (Score: 95-100):
-print("Hello", name, "welcome to python")  # ← This is PERFECT even without ! or capital P
+90-100 (good): 
+- Code runs perfectly
+- Meets ALL requirements exactly as specified
+- Correct logic and calculations
+- Clean, working code
 
-NOT AN ERROR:
-- "welcome" vs "Welcome" → Both work, not an error
-- "python" vs "Python" → Both work, not an error  
-- Missing "!" at end → Still works, not an error
+70-89 (not bad):
+- Code runs but misses 1-2 minor requirements
+- Has small logic issues but mostly correct
+- OR has minor syntax errors but fixable
 
-ACTUAL ERROR (Should flag):
-prit("Hello")  # ← Typo in keyword, code won't run
-x = 5 / 0      # ← Runtime error, will crash
+40-69 (not bad):
+- Code runs but significantly deviates from requirements
+- Wrong conditions, thresholds, or logic structure
+- Missing important parts of what was asked
+- Major logic errors
 
-EVALUATION:
-1. Does code RUN without crashing? → If YES, it's at least "good"
-2. Does it do what the question asks? → If YES, score 90-100
-3. Only check: Can it execute? Does it solve the problem?
+0-39 (bad):
+- Code doesn't run (syntax errors)
+- Completely wrong approach
+- Missing most requirements
 
-QUALITY RATING:
-- "good" (90-100): Code runs and solves the problem correctly
-- "not bad" (50-89): Code has syntax errors BUT logic is mostly right
-- "bad" (0-49): Code won't run OR completely wrong logic
+EXAMPLE STRICT EVALUATION:
+
+Question: "If average >= 95, print 'Congratulations! That is a great average!'"
+
+Student Code: "if average >= 90: print('Excellent work!')"
+
+SCORE: 45-55 (not bad) - Wrong threshold (90 vs 95), wrong message, doesn't follow requirements
 
 OUTPUT FORMAT (JSON ONLY):
 {
     "score": <number 0-100>,
     "quality": "good|not bad|bad",
     "feedback": {
-        "summary": "Does it work? Does it solve the problem?",
-        "strengths": ["what works"],
-        "weaknesses": ["ONLY if code fails to run or wrong calculations"]
+        "summary": "Brief summary focusing on requirement matching",
+        "strengths": ["what works correctly"],
+        "weaknesses": ["what doesn't match requirements or has errors"]
     },
     "errors": [
         {
-            "line": <line number>,
-            "type": "syntax|logic|runtime",
-            "description": "ONLY errors that prevent code from working",
-            "suggestion": "How to fix using material concepts"
+            "line": <line number or 0>,
+            "type": "requirements|syntax|logic|runtime",
+            "description": "Clear description of what's wrong",
+            "suggestion": "How to fix it"
         }
     ],
     "notes": "Remember: Punctuation and capitalization in strings are NOT errors!"

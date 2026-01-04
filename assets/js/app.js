@@ -5,7 +5,10 @@ class ExamApp {
     this.currentQuestionData = null;
     this.isProcessing = false;
     this.codeMirror = null;
+    this.pyodide = null;
+    this.pyodideReady = false;
     this.init();
+    this.initPyodide();
   }
 
   init() {
@@ -68,9 +71,147 @@ class ExamApp {
     const submitBtn = document.getElementById("submitBtn");
     submitBtn.addEventListener("click", () => this.submitCode());
 
+    // Run Code Button
+    const runCodeBtn = document.getElementById("runCodeBtn");
+    runCodeBtn.addEventListener("click", () => this.runCode());
+
+    // Clear Output Button
+    const clearOutputBtn = document.getElementById("clearOutputBtn");
+    if (clearOutputBtn) {
+      clearOutputBtn.addEventListener("click", () => this.clearOutput());
+    }
+
     // Try Again Button
     const tryAgainBtn = document.getElementById("tryAgainBtn");
     tryAgainBtn.addEventListener("click", () => this.resetForNewQuestion());
+  }
+
+  async initPyodide() {
+    try {
+      console.log("🐍 Loading Pyodide...");
+      this.pyodide = await loadPyodide();
+
+      // Setup custom input() function using browser prompts
+      this.pyodide.runPython(`
+import sys
+import builtins
+
+class BrowserInput:
+    def __init__(self):
+        self.buffer = []
+    
+    def __call__(self, prompt=""):
+        # This will be intercepted by JavaScript
+        import js
+        result = js.prompt(str(prompt))
+        if result is None:
+            raise KeyboardInterrupt("Input cancelled")
+        return result
+
+# Replace built-in input with our browser version
+builtins.input = BrowserInput()
+      `);
+
+      this.pyodideReady = true;
+      console.log("✅ Pyodide loaded successfully!");
+      this.showToast("Python runtime ready!", "success");
+    } catch (error) {
+      console.error("❌ Failed to load Pyodide:", error);
+      this.showToast("Failed to load Python runtime", "error");
+    }
+  }
+
+  async runCode() {
+    if (this.isProcessing) return;
+
+    const code = this.codeMirror.getValue().trim();
+    if (!code) {
+      this.showToast("Please write some code first", "error");
+      return;
+    }
+
+    if (!this.pyodideReady) {
+      this.showToast(
+        "Python runtime is still loading, please wait...",
+        "warning"
+      );
+      return;
+    }
+
+    this.isProcessing = true;
+    const runCodeBtn = document.getElementById("runCodeBtn");
+    const outputSection = document.getElementById("outputSection");
+    const codeOutput = document.getElementById("codeOutput");
+
+    runCodeBtn.disabled = true;
+    runCodeBtn.innerHTML = `
+      <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      Running...
+    `;
+
+    // Show output section
+    outputSection.classList.remove("hidden");
+    codeOutput.innerHTML =
+      '<div class="text-gray-500 animate-pulse">Executing Python code...</div>';
+
+    try {
+      // Capture stdout
+      let output = "";
+      this.pyodide.setStdout({
+        batched: (text) => {
+          output += text + "\n";
+        },
+      });
+
+      // Run the code
+      await this.pyodide.runPythonAsync(code);
+
+      // Display output
+      if (output.trim()) {
+        codeOutput.innerHTML = `<div class="text-green-400">${this.escapeHtml(
+          output
+        )}</div>`;
+        this.showToast("Code executed successfully!", "success");
+      } else {
+        codeOutput.innerHTML = '<div class="text-gray-400">(No output)</div>';
+        this.showToast("Code executed (no output)", "success");
+      }
+    } catch (error) {
+      // Display error
+      const errorMessage = error.message || String(error);
+      codeOutput.innerHTML = `<div class="text-red-400">
+        <div class="font-bold mb-2">❌ Error:</div>
+        <div>${this.escapeHtml(errorMessage)}</div>
+      </div>`;
+      this.showToast("Code execution failed", "error");
+    } finally {
+      this.isProcessing = false;
+      runCodeBtn.disabled = false;
+      runCodeBtn.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Run Code
+      `;
+    }
+  }
+
+  clearOutput() {
+    const codeOutput = document.getElementById("codeOutput");
+    const outputSection = document.getElementById("outputSection");
+    codeOutput.innerHTML =
+      '<div class="text-gray-500">Output will appear here...</div>';
+    outputSection.classList.add("hidden");
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   async handleMaterialSelect(event) {
@@ -503,7 +644,9 @@ class ExamApp {
   checkSubmitButton() {
     const code = this.codeMirror.getValue().trim();
     const submitBtn = document.getElementById("submitBtn");
+    const runCodeBtn = document.getElementById("runCodeBtn");
     submitBtn.disabled = !code || this.isProcessing;
+    runCodeBtn.disabled = !code || this.isProcessing || !this.pyodideReady;
   }
 
   updateUIState() {
