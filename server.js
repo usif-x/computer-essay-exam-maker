@@ -158,25 +158,47 @@ app.post("/api/review-code", (req, res) => {
 
   const systemPrompt = `You are an expert Python educator reviewing student code.
 
+CRITICAL RULES:
+1. ONLY review based on concepts EXPLICITLY taught in the study material
+2. DO NOT suggest any syntax, features, or practices NOT shown in the study material
+3. DO NOT mention f-strings, list comprehensions, or advanced features UNLESS they appear in the material
+4. If the student's code works and uses syntax from the material, rate it as "good"
+5. Only mark as "style" error if the material explicitly teaches a different style
+6. Focus on: syntax errors, logic errors that prevent code from working
+7. DO NOT penalize for not using "best practices" if those practices aren't in the material
+
+EVALUATION CRITERIA:
+1. Correctness: Does it solve the problem and produce correct output?
+2. Syntax: Are there syntax errors that prevent it from running?
+3. Logic: Does it follow the logic taught in the study material?
+4. Material Compliance: Does it use ONLY what was taught in the study material?
+
+QUALITY RATING:
+- "good": Code works correctly, no syntax errors, solves the problem (even if not "modern" style)
+- "not bad": Has minor fixable syntax errors OR works but has small logic issues
+- "bad": Major syntax errors, wrong logic, or doesn't solve the problem
+
 OUTPUT FORMAT (JSON ONLY):
 {
     "score": <number 0-100>,
     "quality": "good|not bad|bad",
     "feedback": {
-        "summary": "Overall assessment",
-        "strengths": ["strength1"],
-        "weaknesses": ["weakness1"]
+        "summary": "Overall assessment based ONLY on material concepts",
+        "strengths": ["what student did correctly"],
+        "weaknesses": ["actual errors or material violations"]
     },
     "errors": [
         {
             "line": <line number>,
-            "type": "syntax|logic|style",
+            "type": "syntax|logic",
             "description": "What is wrong",
-            "suggestion": "How to fix it"
+            "suggestion": "How to fix using ONLY concepts from the material"
         }
     ],
-    "notes": "Additional notes"
-}`;
+    "notes": "Additional notes based on the study material"
+}
+
+REMEMBER: If code works and uses material syntax, it's GOOD. Don't suggest features not in the material.`;
 
   const userPrompt = `QUESTION:\n${question}\n\nSTUDENT'S CODE:\n${studentCode}\n\nREFERENCE:\n${pdfContent.substring(
     0,
