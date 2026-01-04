@@ -212,6 +212,8 @@ class ExamApp {
         makeHarder
       );
 
+      console.log("Question result:", result);
+
       this.currentQuestionData = result;
       this.currentQuestion = result.question;
 
@@ -228,9 +230,11 @@ class ExamApp {
         result.difficulty || "medium"
       }</span>
                     </div>
-                    <div class="text-gray-800 text-base leading-relaxed">${this.markdownToHtml(
+                    <div class="text-gray-800 text-base leading-relaxed">${
                       result.question
-                    )}</div>
+                        ? this.markdownToHtml(result.question)
+                        : "No question generated"
+                    }</div>
                     ${
                       result.hints && result.hints.length > 0
                         ? `

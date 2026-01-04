@@ -1,95 +1,217 @@
 const express = require("express");
 const cors = require("cors");
-const http = require("http");
 const https = require("https");
-const url = require("url");
 const path = require("path");
 const fs = require("fs");
 
-// Create Express app for static files
+// Create Express app
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
-// CORS Proxy route - handles API requests through the main server
-app.all("/api/proxy/*", (req, res) => {
-  const targetUrl = req.url.substring(11); // Remove '/api/proxy/'
-
-  if (!targetUrl || !targetUrl.startsWith("http")) {
-    res
-      .status(400)
-      .send("Bad Request: Target URL must start with http:// or https://");
-    return;
+// Load configuration
+function getConfig() {
+  if (process.env.API_KEY && process.env.API_URL && process.env.MODEL) {
+    return {
+      api_key: process.env.API_KEY,
+      api_url: process.env.API_URL,
+      model: process.env.MODEL,
+    };
   }
 
-  console.log(`🔄 Proxying ${req.method} to: ${targetUrl}`);
+  const secretPath = path.join(__dirname, "secret");
+  if (fs.existsSync(secretPath)) {
+    const content = fs.readFileSync(secretPath, "utf8");
+    const config = {};
+    content.split("\n").forEach((line) => {
+      const colonIndex = line.indexOf(":");
+      if (colonIndex > -1) {
+        const key = line.substring(0, colonIndex).trim();
+        const value = line.substring(colonIndex + 1).trim();
+        if (key && value) config[key] = value;
+      }
+    });
+    return config;
+  }
 
-  const parsedUrl = url.parse(targetUrl);
-  const protocol = parsedUrl.protocol === "https:" ? https : http;
+  throw new Error("Configuration not found");
+}
 
-  let body = "";
-  req.on("data", (chunk) => {
-    body += chunk.toString();
+// Helper function to call AI API
+function callAI(messages, onChunk, onComplete, onError) {
+  const config = getConfig();
+
+  const requestBody = JSON.stringify({
+    model: config.model,
+    messages: messages,
+    stream: false,
   });
 
-  req.on("end", () => {
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port,
-      path: parsedUrl.path,
-      method: req.method,
-      headers: {
-        "Content-Type": req.headers["content-type"] || "application/json",
-        Authorization: req.headers["authorization"] || "",
-        "Content-Length": Buffer.byteLength(body),
-      },
-    };
+  const apiUrl = new URL(config.api_url + "/chat/completions");
 
-    const proxyReq = protocol.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, {
-        ...proxyRes.headers,
-        "Access-Control-Allow-Origin": "*",
-      });
-      proxyRes.pipe(res);
+  const options = {
+    hostname: apiUrl.hostname,
+    port: apiUrl.port || 443,
+    path: apiUrl.pathname,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.api_key}`,
+      "Content-Length": Buffer.byteLength(requestBody),
+    },
+  };
+
+  console.log(`🤖 Calling AI: ${config.model}`);
+
+  const req = https.request(options, (res) => {
+    let data = "";
+
+    res.on("data", (chunk) => {
+      data += chunk.toString();
     });
 
-    proxyReq.on("error", (error) => {
-      console.error("Proxy error:", error);
-      res.status(500).send("Proxy Error: " + error.message);
+    res.on("end", () => {
+      try {
+        const response = JSON.parse(data);
+        console.log(`✅ AI Response received`);
+        onComplete(response);
+      } catch (error) {
+        console.error("❌ Parse error:", error.message);
+        onError(error);
+      }
     });
-
-    if (body) proxyReq.write(body);
-    proxyReq.end();
   });
+
+  req.on("error", (error) => {
+    console.error("❌ Request error:", error.message);
+    onError(error);
+  });
+
+  req.write(requestBody);
+  req.end();
+}
+
+// API: Generate question
+app.post("/api/generate-question", (req, res) => {
+  const { pdfContent, previousQuestion, makeHarder } = req.body;
+
+  let systemPrompt = "";
+  let userPrompt = "";
+
+  if (makeHarder && previousQuestion) {
+    systemPrompt = `You are an expert computer science educator creating progressively challenging Python programming questions.
+
+TASK: Generate a HARDER version of the previous question while STRICTLY staying within the study material concepts.
+
+CRITICAL REQUIREMENTS:
+1. The new question MUST be based ONLY on concepts explicitly found in the study material
+2. DO NOT introduce ANY new topics, syntax, or concepts not covered in the study material
+3. DO NOT ask for: try-except, error handling, debugging, or ANY feature not explicitly taught in the material
+4. Build upon the SAME topic/concept from previous question but add complexity ONLY using what's taught
+5. Still keep it solvable and educational (not impossible)
+
+OUTPUT FORMAT (JSON ONLY):
+{
+    "question": "More challenging question",
+    "topic": "Same topic as before",
+    "difficulty": "medium|hard",
+    "hints": ["hint1", "hint2"]
+}`;
+
+    userPrompt = `Study Material:\n\n${pdfContent}\n\nPrevious Question:\n${previousQuestion}\n\nGenerate a HARDER question using ONLY concepts from the study material.`;
+  } else {
+    systemPrompt = `You are an expert computer science educator creating Python programming questions.
+
+Generate ONE Python programming question based on the study material provided.
+
+OUTPUT FORMAT (JSON ONLY):
+{
+    "question": "Clear question description",
+    "topic": "Topic from study material",
+    "difficulty": "easy|medium",
+    "hints": ["hint1", "hint2"]
+}`;
+
+    userPrompt = `Study Material:\n\n${pdfContent}\n\nGenerate ONE simple Python programming question based on this material.`;
+  }
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  callAI(
+    messages,
+    null,
+    (response) => {
+      res.json(response);
+    },
+    (error) => {
+      res.status(500).json({ error: error.message });
+    }
+  );
+});
+
+// API: Review code
+app.post("/api/review-code", (req, res) => {
+  const { question, studentCode, pdfContent } = req.body;
+
+  const systemPrompt = `You are an expert Python educator reviewing student code.
+
+OUTPUT FORMAT (JSON ONLY):
+{
+    "score": <number 0-100>,
+    "quality": "good|not bad|bad",
+    "feedback": {
+        "summary": "Overall assessment",
+        "strengths": ["strength1"],
+        "weaknesses": ["weakness1"]
+    },
+    "errors": [
+        {
+            "line": <line number>,
+            "type": "syntax|logic|style",
+            "description": "What is wrong",
+            "suggestion": "How to fix it"
+        }
+    ],
+    "notes": "Additional notes"
+}`;
+
+  const userPrompt = `QUESTION:\n${question}\n\nSTUDENT'S CODE:\n${studentCode}\n\nREFERENCE:\n${pdfContent.substring(
+    0,
+    2000
+  )}\n\nReview in JSON format.`;
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  callAI(
+    messages,
+    null,
+    (response) => {
+      res.json(response);
+    },
+    (error) => {
+      res.status(500).json({ error: error.message });
+    }
+  );
 });
 
 // Serve static files
 app.use(express.static("."));
 
-// API endpoint to get configuration
-// Prioritizes environment variables over secret file
+// Config endpoint (for backwards compatibility)
 app.get("/secret", (req, res) => {
-  // Check for environment variables first
-  if (process.env.API_KEY && process.env.API_URL && process.env.MODEL) {
-    const config = `api_key:${process.env.API_KEY}\napi_url:${process.env.API_URL}\nmodel:${process.env.MODEL}`;
+  try {
+    const config = getConfig();
+    const configText = `api_key:${config.api_key}\napi_url:${config.api_url}\nmodel:${config.model}`;
     res.setHeader("Content-Type", "text/plain");
-    res.send(config);
-    console.log("✅ Serving config from environment variables");
-    return;
-  }
-
-  // Fall back to secret file
-  const secretPath = path.join(__dirname, "secret");
-  if (fs.existsSync(secretPath)) {
-    res.sendFile(secretPath);
-    console.log("✅ Serving config from secret file");
-  } else {
-    res
-      .status(500)
-      .send(
-        "Configuration not found. Set API_KEY, API_URL, and MODEL environment variables or create a secret file."
-      );
-    console.error("❌ No configuration found!");
+    res.send(configText);
+  } catch (error) {
+    res.status(500).send("Configuration not found");
   }
 });
 
@@ -98,14 +220,15 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Start static server
-const STATIC_PORT = process.env.PORT || 3000;
-app.listen(STATIC_PORT, "0.0.0.0", () => {
-  console.log(`📚 Exam Maker running on http://0.0.0.0:${STATIC_PORT}`);
-  console.log(`🔄 CORS Proxy available at /api/proxy/`);
-  console.log(
-    `📝 Config source: ${
-      process.env.API_KEY ? "Environment Variables" : "Secret File"
-    }`
-  );
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`📚 Exam Maker running on http://0.0.0.0:${PORT}`);
+  console.log(`🤖 AI API endpoints: /api/generate-question, /api/review-code`);
+  try {
+    const config = getConfig();
+    console.log(`✅ Config loaded: ${config.model}`);
+  } catch (error) {
+    console.error(`❌ Config not found`);
+  }
 });
