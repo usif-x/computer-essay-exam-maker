@@ -23,10 +23,21 @@ class AIService {
         }
       });
 
-      // Add CORS proxy for development (comment out for production with proper backend)
-      this.corsProxy = "http://localhost:8080/";
-      // Alternative: Use empty string if API supports CORS or you have a backend
-      // this.corsProxy = '';
+      // Detect CORS proxy URL based on environment
+      // For production deployment, use the same domain's proxy port
+      const isProduction =
+        !window.location.hostname.includes("localhost") &&
+        !window.location.hostname.includes("127.0.0.1");
+
+      if (isProduction) {
+        // In production, use the deployed CORS proxy (port 8080)
+        this.corsProxy = `${window.location.protocol}//${window.location.hostname}:8080/`;
+        console.log("🌐 Using production CORS proxy:", this.corsProxy);
+      } else {
+        // In development, use localhost
+        this.corsProxy = "http://localhost:8080/";
+        console.log("💻 Using development CORS proxy:", this.corsProxy);
+      }
 
       console.log("Config loaded:", {
         api_url: this.config.api_url,

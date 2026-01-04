@@ -49,25 +49,40 @@ git push -u origin main
    - **Build Pack**: `nixpacks` or `dockerfile`
    - **Port**: `3000`
 
-4. **Environment Variables**
+4. **Environment Variables** ⭐ RECOMMENDED METHOD
 
-   Add these in Coolify:
+   In Coolify, go to your application → Environment Variables and add:
 
    ```
+   # Required - Application Ports
    PORT=3000
    PROXY_PORT=8080
    NODE_ENV=production
+
+   # Required - API Configuration (RECOMMENDED)
+   API_KEY=your_api_key_here
+   API_URL=https://api.xiaomimimo.com/v1
+   MODEL=mimo-v2-flash
    ```
 
-5. **Add API Credentials**
+   **Benefits of using Environment Variables:**
 
-   Create a `secret` file in your repository with:
+   - ✅ No need to commit sensitive data
+   - ✅ Easy to update without redeploying
+   - ✅ Coolify handles secrets securely
+   - ✅ Different configs for different environments
+
+5. **Alternative: Using Secret File** (Not Recommended)
+
+   If you prefer to use a file instead of environment variables, create a `secret` file in your repository:
 
    ```
    api_key:YOUR_API_KEY
    api_url:https://api.xiaomimimo.com/v1
    model:mimo-v2-flash
    ```
+
+   ⚠️ **Warning**: Add `secret` to `.gitignore` and use Coolify's file upload feature or build arguments.
 
 6. **Configure Ports**
 
@@ -187,11 +202,22 @@ If port 8080 isn't accessible:
 
 ## Environment Variables Reference
 
-| Variable   | Default    | Description          |
-| ---------- | ---------- | -------------------- |
-| PORT       | 3000       | Main web server port |
-| PROXY_PORT | 8080       | CORS proxy port      |
-| NODE_ENV   | production | Node environment     |
+| Variable    | Required  | Default    | Description             |
+| ----------- | --------- | ---------- | ----------------------- |
+| PORT        | No        | 3000       | Main web server port    |
+| PROXY_PORT  | No        | 8080       | CORS proxy port         |
+| NODE_ENV    | No        | production | Node environment        |
+| **API_KEY** | **Yes\*** | -          | **Your AI API key**     |
+| **API_URL** | **Yes\*** | -          | **AI API endpoint URL** |
+| **MODEL**   | **Yes\*** | -          | **AI model name**       |
+
+**\* Required if not using `secret` file**
+
+The server will:
+
+1. First check for `API_KEY`, `API_URL`, and `MODEL` environment variables
+2. If not found, fall back to reading the `secret` file
+3. If neither exists, return an error
 
 ## Accessing the Application
 

@@ -4,6 +4,7 @@ const http = require("http");
 const https = require("https");
 const url = require("url");
 const path = require("path");
+const fs = require("fs");
 
 // Create Express app for static files
 const app = express();
@@ -12,6 +13,33 @@ app.use(express.json());
 
 // Serve static files
 app.use(express.static("."));
+
+// API endpoint to get configuration
+// Prioritizes environment variables over secret file
+app.get("/secret", (req, res) => {
+  // Check for environment variables first
+  if (process.env.API_KEY && process.env.API_URL && process.env.MODEL) {
+    const config = `api_key:${process.env.API_KEY}\napi_url:${process.env.API_URL}\nmodel:${process.env.MODEL}`;
+    res.setHeader("Content-Type", "text/plain");
+    res.send(config);
+    console.log("✅ Serving config from environment variables");
+    return;
+  }
+
+  // Fall back to secret file
+  const secretPath = path.join(__dirname, "secret");
+  if (fs.existsSync(secretPath)) {
+    res.sendFile(secretPath);
+    console.log("✅ Serving config from secret file");
+  } else {
+    res
+      .status(500)
+      .send(
+        "Configuration not found. Set API_KEY, API_URL, and MODEL environment variables or create a secret file."
+      );
+    console.error("❌ No configuration found!");
+  }
+});
 
 // Main route
 app.get("/", (req, res) => {
@@ -22,6 +50,11 @@ app.get("/", (req, res) => {
 const STATIC_PORT = process.env.PORT || 3000;
 app.listen(STATIC_PORT, "0.0.0.0", () => {
   console.log(`📚 Exam Maker running on http://0.0.0.0:${STATIC_PORT}`);
+  console.log(
+    `📝 Config source: ${
+      process.env.API_KEY ? "Environment Variables" : "Secret File"
+    }`
+  );
 });
 
 // ===== CORS Proxy Server =====
