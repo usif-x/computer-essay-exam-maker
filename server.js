@@ -161,44 +161,57 @@ app.post("/api/review-code", (req, res) => {
 CRITICAL RULES:
 1. ONLY review based on concepts EXPLICITLY taught in the study material
 2. DO NOT suggest any syntax, features, or practices NOT shown in the study material
-3. DO NOT mention f-strings, list comprehensions, or advanced features UNLESS they appear in the material
-4. If the student's code works and uses syntax from the material, rate it as "good"
-5. Only mark as "style" error if the material explicitly teaches a different style
-6. Focus on: syntax errors, logic errors that prevent code from working
-7. DO NOT penalize for not using "best practices" if those practices aren't in the material
+3. FOCUS ONLY on errors that prevent code from working correctly
+4. IGNORE minor text formatting issues (punctuation, capitalization in output strings)
+5. DO NOT mark as error: missing punctuation, wrong capitalization in strings, English grammar
+6. If the student's code works and solves the problem, rate it as "good"
+
+WHAT TO CHECK:
+✓ Syntax errors (code won't run - missing colons, wrong indentation, typos in keywords)
+✓ Logic errors (wrong algorithm, incorrect conditions, wrong operations)
+✓ Runtime errors (division by zero, index out of range, wrong data types)
+✓ Does it solve the actual problem asked in the question?
+
+WHAT TO IGNORE:
+✗ Punctuation in output strings (., !, ?, etc.)
+✗ Capitalization of English words in strings
+✗ Spacing in output text
+✗ Variable naming style (if it works)
+✗ "Best practices" not taught in material
+✗ Modern syntax (f-strings, etc.) if material doesn't teach it
 
 EVALUATION CRITERIA:
-1. Correctness: Does it solve the problem and produce correct output?
-2. Syntax: Are there syntax errors that prevent it from running?
-3. Logic: Does it follow the logic taught in the study material?
-4. Material Compliance: Does it use ONLY what was taught in the study material?
+1. Does the code RUN without syntax errors?
+2. Does it produce the CORRECT RESULT?
+3. Is the LOGIC correct for solving the problem?
+4. Does it use concepts from the study material?
 
 QUALITY RATING:
-- "good": Code works correctly, no syntax errors, solves the problem (even if not "modern" style)
-- "not bad": Has minor fixable syntax errors OR works but has small logic issues
-- "bad": Major syntax errors, wrong logic, or doesn't solve the problem
+- "good": Code runs, solves problem correctly, no syntax/logic errors
+- "not bad": Minor syntax error OR mostly correct logic with small mistake
+- "bad": Major syntax errors, completely wrong logic, or doesn't run
 
 OUTPUT FORMAT (JSON ONLY):
 {
     "score": <number 0-100>,
     "quality": "good|not bad|bad",
     "feedback": {
-        "summary": "Overall assessment based ONLY on material concepts",
-        "strengths": ["what student did correctly"],
-        "weaknesses": ["actual errors or material violations"]
+        "summary": "Focus on whether code works and solves the problem",
+        "strengths": ["what works correctly"],
+        "weaknesses": ["ONLY actual syntax/logic/runtime errors"]
     },
     "errors": [
         {
             "line": <line number>,
-            "type": "syntax|logic",
-            "description": "What is wrong",
-            "suggestion": "How to fix using ONLY concepts from the material"
+            "type": "syntax|logic|runtime",
+            "description": "Why code doesn't work or gives wrong result",
+            "suggestion": "How to fix the actual error"
         }
     ],
-    "notes": "Additional notes based on the study material"
+    "notes": "Focus on code functionality, not text formatting"
 }
 
-REMEMBER: If code works and uses material syntax, it's GOOD. Don't suggest features not in the material.`;
+IMPORTANT: If code runs and solves the problem, give high score (90-100). Don't deduct points for punctuation or capitalization in strings.`;
 
   const userPrompt = `QUESTION:\n${question}\n\nSTUDENT'S CODE:\n${studentCode}\n\nREFERENCE:\n${pdfContent.substring(
     0,
