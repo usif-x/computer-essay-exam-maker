@@ -1,0 +1,22 @@
+{
+  "name": "computer-essay-exam-maker",
+  "version": "1.0.0",
+  "description": "AI-Powered Python Code Practice & Review System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "python",
+    "education",
+    "ai",
+    "exam"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
